@@ -1,11 +1,16 @@
 package com.tyee.bca_registration.controller;
 
-
 import java.io.ByteArrayOutputStream;
+import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.OutputStreamWriter;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 
@@ -37,6 +42,7 @@ public class RegistrationController {
     public ResponseEntity<String> healthCheck() {
         return new ResponseEntity<>("OK", HttpStatus.OK);
     }
+
     @PostMapping("/register")
     public ResponseEntity<byte[]> registerMembers(
             @RequestParam("file") MultipartFile file,
@@ -63,11 +69,29 @@ public class RegistrationController {
                 seMemberData.put("dob", member.getBirthday());
                 seMemberData.put("club", member.getClub());
 
-                String status = registrationService.registerMember(member, seMemberData);
+                String status;
+                if (isTest) {
+                    // Just an example to demonstrate test mode logic.
+                    status = "Test Mode - No Registration Performed";
+                } else {
+                    status = registrationService.registerMember(member, seMemberData);
+                }
 
-                output.add(new String[]{member.getFirstName(), member.getLastName(), member.getBirthday(), member.getClub(), status});
+                output.add(new String[]{
+                    member.getFirstName(),
+                    member.getLastName(),
+                    member.getBirthday(),
+                    member.getClub(),
+                    status
+                });
             } catch (Exception e) {
-                output.add(new String[]{row[0], row[1], row[2], row[3], "Error: " + e.getMessage()});
+                output.add(new String[]{
+                    row[0],
+                    row[1],
+                    row[2],
+                    row[3],
+                    "Error: " + e.getMessage()
+                });
             }
         });
 
@@ -81,5 +105,48 @@ public class RegistrationController {
         headers.setContentDispositionFormData("attachment", "registration_result.csv");
 
         return new ResponseEntity<>(baos.toByteArray(), headers, HttpStatus.OK);
+    }
+
+    /**
+     * Retrieves the last 200 lines of the application log file.
+     * Adjust logFilePath or numberOfLines as needed.
+     */
+    @GetMapping("/logs")
+    public ResponseEntity<String> getLogs() {
+        // Path where the application logs are written, adjust if needed
+        Path logFilePath = Paths.get("/app/application.log");
+        // Number of lines to return
+        int numberOfLines = 200;
+
+        try {
+            if (!Files.exists(logFilePath)) {
+                return ResponseEntity.status(HttpStatus.NOT_FOUND)
+                                     .body("Log file not found: " + logFilePath);
+            }
+            // Read the last 200 lines
+            Deque<String> linesBuffer = new LinkedList<>();
+            List<String> allLines = Files.readAllLines(logFilePath);
+
+            for (String line : allLines) {
+                linesBuffer.add(line);
+                if (linesBuffer.size() > numberOfLines) {
+                    linesBuffer.removeFirst();
+                }
+            }
+
+            // Combine lines into a single string
+            StringBuilder builder = new StringBuilder();
+            for (String line : linesBuffer) {
+                builder.append(line).append(System.lineSeparator());
+            }
+
+            return new ResponseEntity<>(builder.toString(), HttpStatus.OK);
+
+        } catch (IOException e) {
+            return new ResponseEntity<>(
+                "Unable to read log file: " + e.getMessage(),
+                HttpStatus.INTERNAL_SERVER_ERROR
+            );
+        }
     }
 }
