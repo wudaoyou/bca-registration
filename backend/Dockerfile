@@ -9,7 +9,7 @@ RUN mvn dependency:go-offline
 # Now copy the source code
 COPY src ./src
 
-# Compile and package your Spring Boot app
+# Compile and package your Spring Boot app (skip tests for speed)
 RUN mvn clean package -DskipTests
 
 # 2) Runtime stage: use a slimmed-down OpenJDK image to run the jar
@@ -22,5 +22,15 @@ RUN mkdir -p /app/logs && chmod 777 /app/logs
 # Copy the packaged jar from the build stage
 COPY --from=build /app/target/*.jar backend.jar
 
+# Expose both the app port (8080) and the debug port (5005)
 EXPOSE 8080
-ENTRYPOINT ["java","-jar","backend.jar"]
+EXPOSE 5005
+
+# Run the JVM in debug mode:
+# - agentlib:jdwp=transport=dt_socket,server=y => allow debugger to attach
+# - suspend=n => don't block until debugger connects (set to y if you want to wait)
+# - address=0.0.0.0:5005 => listen for debugger on port 5005
+ENTRYPOINT ["java", \
+  "-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=0.0.0.0:5005", \
+  "-jar", \
+  "backend.jar"]
